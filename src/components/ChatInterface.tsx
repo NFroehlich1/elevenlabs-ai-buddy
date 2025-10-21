@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useConversation } from "@11labs/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Mic, MicOff, MessageSquare } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Mic, MicOff, MessageSquare, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Message {
@@ -15,6 +16,7 @@ const ChatInterface = () => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isPermissionGranted, setIsPermissionGranted] = useState(false);
+  const [textInput, setTextInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const conversation = useConversation({
@@ -122,6 +124,36 @@ const ChatInterface = () => {
     }
   };
 
+  const sendTextMessage = () => {
+    if (!textInput.trim()) return;
+
+    const newMessage: Message = {
+      role: "user",
+      content: textInput,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+    setTextInput("");
+
+    // Simulate AI response for text messages
+    setTimeout(() => {
+      const aiResponse: Message = {
+        role: "assistant",
+        content: "Ich habe deine Nachricht erhalten. Für interaktive Gespräche starte bitte eine Voice-Konversation.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+    }, 1000);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendTextMessage();
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background p-4 gap-4">
       {/* Header */}
@@ -188,7 +220,27 @@ const ChatInterface = () => {
         <div ref={messagesEndRef} />
       </Card>
 
-      {/* Controls */}
+      {/* Text Chat Input */}
+      <div className="flex items-center gap-3 px-6 py-4 bg-gradient-shine rounded-2xl border border-border shadow-soft">
+        <Input
+          type="text"
+          placeholder="Schreibe eine Nachricht..."
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          onKeyPress={handleKeyPress}
+          className="flex-1 bg-background border-border"
+        />
+        <Button
+          onClick={sendTextMessage}
+          disabled={!textInput.trim()}
+          size="lg"
+          className="bg-gradient-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-glow"
+        >
+          <Send className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Voice Controls */}
       <div className="flex items-center justify-center gap-4 px-6 py-4 bg-gradient-shine rounded-2xl border border-border shadow-soft">
         {!isPermissionGranted ? (
           <Button
