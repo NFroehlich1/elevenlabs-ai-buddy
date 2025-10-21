@@ -38,7 +38,7 @@ const ChatInterface = () => {
         let role: "user" | "assistant" | undefined;
         let content: string | undefined;
 
-        // Try different possible message structures
+        // Handle different message structures from ElevenLabs
         if (message.role && message.content) {
           role = message.role;
           content = message.content;
@@ -48,6 +48,14 @@ const ChatInterface = () => {
         } else if (message.type === 'transcript' && message.text) {
           role = message.source === 'user' ? 'user' : 'assistant';
           content = message.text;
+        } else if (message.type === 'agent_response' && message.text) {
+          // Handle text responses from agent
+          role = 'assistant';
+          content = message.text;
+        } else if (message.type === 'response' && message.output) {
+          // Handle structured responses
+          role = 'assistant';
+          content = message.output;
         }
 
         if (role && content) {
@@ -56,7 +64,14 @@ const ChatInterface = () => {
             content,
             timestamp: new Date(),
           };
-          setMessages((prev) => [...prev, newMessage]);
+          setMessages((prev) => {
+            // Avoid duplicate messages
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg?.content === content && lastMsg?.role === role) {
+              return prev;
+            }
+            return [...prev, newMessage];
+          });
         }
       }
     },
@@ -124,7 +139,7 @@ const ChatInterface = () => {
     }
   };
 
-  const sendTextMessage = () => {
+  const sendTextMessage = async () => {
     if (!textInput.trim()) return;
 
     const newMessage: Message = {
@@ -134,17 +149,45 @@ const ChatInterface = () => {
     };
 
     setMessages((prev) => [...prev, newMessage]);
+    const messageText = textInput;
     setTextInput("");
 
-    // Simulate AI response for text messages
-    setTimeout(() => {
-      const aiResponse: Message = {
-        role: "assistant",
-        content: "Ich habe deine Nachricht erhalten. Für interaktive Gespräche starte bitte eine Voice-Konversation.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
+    // Send text message through ElevenLabs WebSocket if connected
+    if (conversation.status === "connected") {
+      try {
+        // Send text input to ElevenLabs
+        const textEvent = {
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: messageText }]
+          }
+        };
+        
+        // Access the internal WebSocket connection
+        const ws = (conversation as any).ws;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(textEvent));
+          ws.send(JSON.stringify({ type: 'response.create' }));
+        } else {
+          throw new Error("WebSocket not connected");
+        }
+      } catch (error) {
+        console.error("Failed to send text message:", error);
+        toast({
+          title: "Nachricht fehlgeschlagen",
+          description: "Starte zuerst eine Voice-Konversation für Text-Chat",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Nicht verbunden",
+        description: "Starte zuerst eine Voice-Konversation",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -224,15 +267,20 @@ const ChatInterface = () => {
       <div className="flex items-center gap-3 px-6 py-4 bg-gradient-shine rounded-2xl border border-border shadow-soft">
         <Input
           type="text"
-          placeholder="Schreibe eine Nachricht..."
+          placeholder={
+            conversation.status === "connected" 
+              ? "Schreibe eine Nachricht..." 
+              : "Starte zuerst eine Konversation..."
+          }
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
           onKeyPress={handleKeyPress}
+          disabled={conversation.status !== "connected"}
           className="flex-1 bg-background border-border"
         />
         <Button
           onClick={sendTextMessage}
-          disabled={!textInput.trim()}
+          disabled={!textInput.trim() || conversation.status !== "connected"}
           size="lg"
           className="bg-gradient-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-glow"
         >
