@@ -28,16 +28,34 @@ const ChatInterface = () => {
     onDisconnect: () => {
       console.log("Disconnected from ElevenLabs");
     },
-    onMessage: (message) => {
+    onMessage: (message: any) => {
       console.log("Message received:", message);
       
-      if (message.message?.role && message.message?.content) {
-        const newMessage: Message = {
-          role: message.message.role,
-          content: message.message.content,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, newMessage]);
+      // Handle different message types from ElevenLabs
+      if (typeof message === 'object' && message) {
+        let role: "user" | "assistant" | undefined;
+        let content: string | undefined;
+
+        // Try different possible message structures
+        if (message.role && message.content) {
+          role = message.role;
+          content = message.content;
+        } else if (message.message?.role && message.message?.content) {
+          role = message.message.role;
+          content = message.message.content;
+        } else if (message.type === 'transcript' && message.text) {
+          role = message.source === 'user' ? 'user' : 'assistant';
+          content = message.text;
+        }
+
+        if (role && content) {
+          const newMessage: Message = {
+            role,
+            content,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, newMessage]);
+        }
       }
     },
     onError: (error) => {
@@ -78,9 +96,10 @@ const ChatInterface = () => {
 
   const startConversation = async () => {
     try {
+      // For public agents, we can use agentId directly
       await conversation.startSession({
         agentId: "agent_1301k3zm8h2tfcbbt9qnm90ac35t",
-      });
+      } as any);
     } catch (error) {
       console.error("Failed to start conversation:", error);
       toast({
